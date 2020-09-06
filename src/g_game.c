@@ -3548,7 +3548,7 @@ INT16 G_RandMap(INT16 tolflags, INT16 pprevmap, boolean ignorebuffer, UINT8 maph
 
 tryagain:
 
-	usehellmaps = (maphell == 0 ? false : (maphell == 2 || M_RandomChance(FRACUNIT/100))); // 1% chance of Hell
+	usehellmaps = false; // no map hell
 
 	// Find all the maps that are ok and and put them in an array.
 	for (ix = 0; ix < NUMMAPS; ix++)
@@ -3635,6 +3635,11 @@ tryagain:
 	}
 	else
 		ix = okmaps[M_RandomKey(numokmaps)];
+
+	//hack: don't pick any of these maps
+	if (ix == 35){ // Kodachrome Void
+		goto tryagain;
+	}
 
 	if (!callagainsoon)
 	{
