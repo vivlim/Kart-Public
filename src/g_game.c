@@ -3637,7 +3637,10 @@ tryagain:
 		ix = okmaps[M_RandomKey(numokmaps)];
 
 	//hack: don't pick any of these maps
-	if (ix == 35){ // Kodachrome Void
+	// map numbering seems to start at 0, -1 here
+	// not sure if this actually works
+	if (ix == 35 // Kodachrome Void
+		|| ix == 33	){  // cloud cradle zone
 		goto tryagain;
 	}
 
