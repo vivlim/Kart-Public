@@ -51,6 +51,10 @@
 #include "md5.h" // demo checksums
 #include "k_kart.h" // SRB2kart
 
+#ifdef HAVE_DISCORDRPC
+#include "discord.h"
+#endif
+
 gameaction_t gameaction;
 gamestate_t gamestate = GS_NULL;
 UINT8 ultimatemode = false;
@@ -543,6 +547,8 @@ char player_names[MAXPLAYERS][MAXPLAYERNAME+1] =
 	"Player 15",
 	"Player 16"
 }; // SRB2kart - removed Players 17 through 32
+
+INT32 player_name_changes[MAXPLAYERS];
 
 INT16 rw_maximums[NUM_WEAPONS] =
 {
@@ -2498,6 +2504,11 @@ void G_Ticker(boolean run)
 			spectatedelay3--;
 		if (spectatedelay4)
 			spectatedelay4--;
+
+		if (gametic % NAMECHANGERATE == 0)
+		{
+			memset(player_name_changes, 0, sizeof player_name_changes);
+		}
 	}
 }
 
@@ -3655,7 +3666,7 @@ tryagain:
 
 void G_AddMapToBuffer(INT16 map)
 {
-	INT16 bufx, refreshnum = (TOLMaps(G_TOLFlag(gametype)) / 2) + 1;
+	INT16 bufx, refreshnum = max(0, TOLMaps(G_TOLFlag(gametype))-3);
 
 	// Add the map to the buffer.
 	for (bufx = NUMMAPS-1; bufx > 0; bufx--)
@@ -4725,7 +4736,7 @@ char *G_BuildMapTitle(INT32 mapnum)
 		}
 		else if (!(mapheaderinfo[mapnum-1]->levelflags & LF_NOZONE))
 		{
-			zonetext = M_GetText("ZONE");
+			zonetext = M_GetText("Zone");
 			len += strlen(zonetext) + 1;	// ' ' + zonetext
 		}
 		if (strlen(mapheaderinfo[mapnum-1]->actnum) > 0)
@@ -6334,8 +6345,8 @@ void G_RecordDemo(const char *name)
 	maxsize = 1024*1024*2;
 	if (M_CheckParm("-maxdemo") && M_IsNextParm())
 		maxsize = atoi(M_GetNextParm()) * 1024;
-//	if (demobuffer)
-//		free(demobuffer);
+	if (demobuffer)
+		free(demobuffer);
 	demo_p = NULL;
 	demobuffer = malloc(maxsize);
 	demoend = demobuffer + maxsize;
@@ -6376,7 +6387,9 @@ void G_BeginRecording(void)
 		demoflags |= DF_ENCORE;
 
 #ifdef HAVE_BLUA
-	demoflags |= DF_LUAVARS;
+	if (!modeattacking)	// Ghosts don't read luavars, and you shouldn't ever need to save Lua in replays, you doof!
+						// SERIOUSLY THOUGH WHY WOULD YOU LOAD HOSTMOD AND RECORD A GHOST WITH IT !????
+		demoflags |= DF_LUAVARS;
 #endif
 
 	// Setup header.
@@ -6387,7 +6400,7 @@ void G_BeginRecording(void)
 
 	// Full replay title
 	demo_p += 64;
-	snprintf(demo.titlename, 64, "%s - %s", G_BuildMapTitle(gamemap), modeattacking ? "Record Attack" : connectedservername);
+	snprintf(demo.titlename, 64, "%s - %s", G_BuildMapTitle(gamemap), modeattacking ? "Time Attack" : connectedservername);
 
 	// demo checksum
 	demo_p += 16;
@@ -6482,8 +6495,9 @@ void G_BeginRecording(void)
 	WRITEUINT8(demo_p, 0xFF); // Denote the end of the player listing
 
 #ifdef HAVE_BLUA
-	// player lua vars, always saved even if empty
-	LUA_ArchiveDemo();
+	// player lua vars, always saved even if empty... Unless it's record attack.
+	if (!modeattacking)
+		LUA_ArchiveDemo();
 #endif
 
 	memset(&oldcmd,0,sizeof(oldcmd));
@@ -7161,6 +7175,7 @@ void G_DoPlayDemo(char *defdemoname)
 		M_StartMessage(msg, NULL, MM_NOTHING);
 		Z_Free(pdemoname);
 		Z_Free(demobuffer);
+		demobuffer = NULL;
 		demo.playback = false;
 		demo.title = false;
 		return;
@@ -7189,6 +7204,7 @@ void G_DoPlayDemo(char *defdemoname)
 		M_StartMessage(msg, NULL, MM_NOTHING);
 		Z_Free(pdemoname);
 		Z_Free(demobuffer);
+		demobuffer = NULL;
 		demo.playback = false;
 		demo.title = false;
 		return;
@@ -7201,6 +7217,7 @@ void G_DoPlayDemo(char *defdemoname)
 		M_StartMessage(msg, NULL, MM_NOTHING);
 		Z_Free(pdemoname);
 		Z_Free(demobuffer);
+		demobuffer = NULL;
 		demo.playback = false;
 		demo.title = false;
 		return;
@@ -7220,6 +7237,7 @@ void G_DoPlayDemo(char *defdemoname)
 			M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7280,6 +7298,7 @@ void G_DoPlayDemo(char *defdemoname)
 				M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7350,6 +7369,7 @@ void G_DoPlayDemo(char *defdemoname)
 			M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7363,6 +7383,7 @@ void G_DoPlayDemo(char *defdemoname)
 			M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7387,6 +7408,7 @@ void G_DoPlayDemo(char *defdemoname)
 			M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7430,6 +7452,7 @@ void G_DoPlayDemo(char *defdemoname)
 		M_StartMessage(msg, NULL, MM_NOTHING);
 		Z_Free(pdemoname);
 		Z_Free(demobuffer);
+		demobuffer = NULL;
 		demo.playback = false;
 		demo.title = false;
 		return;
@@ -7485,6 +7508,7 @@ void G_DoPlayDemo(char *defdemoname)
 				M_StartMessage(msg, NULL, MM_NOTHING);
 				Z_Free(pdemoname);
 				Z_Free(demobuffer);
+				demobuffer = NULL;
 				demo.playback = false;
 				demo.title = false;
 				return;
@@ -7499,6 +7523,7 @@ void G_DoPlayDemo(char *defdemoname)
 			M_StartMessage(msg, NULL, MM_NOTHING);
 			Z_Free(pdemoname);
 			Z_Free(demobuffer);
+			demobuffer = NULL;
 			demo.playback = false;
 			demo.title = false;
 			return;
@@ -7551,6 +7576,7 @@ void G_DoPlayDemo(char *defdemoname)
 		if (!gL)	// No Lua state! ...I guess we'll just start one...
 			LUA_ClearState();
 
+		// No modeattacking check, DF_LUAVARS won't be present here.
 		LUA_UnArchiveDemo();
 	}
 #endif
@@ -8148,6 +8174,7 @@ ATTRNORETURN void FUNCNORETURN G_StopMetalRecording(void)
 		saved = FIL_WriteFile(va("%sMS.LMP", G_BuildMapName(gamemap)), demobuffer, demo_p - demobuffer); // finally output the file.
 	}
 	free(demobuffer);
+	demobuffer = NULL;
 	metalrecording = false;
 	if (saved)
 		I_Error("Saved to %sMS.LMP", G_BuildMapName(gamemap));
@@ -8328,6 +8355,7 @@ void G_SaveDemo(void)
 	if (FIL_WriteFile(va(pandf, srb2home, demoname), demobuffer, demo_p - demobuffer)) // finally output the file.
 		demo.savemode = DSM_SAVED;
 	free(demobuffer);
+	demobuffer = NULL;
 	demo.recording = false;
 
 	if (modeattacking != ATTACKING_RECORD)
@@ -8396,6 +8424,9 @@ boolean G_DemoTitleResponder(event_t *ev)
 void G_SetGamestate(gamestate_t newstate)
 {
 	gamestate = newstate;
+#ifdef HAVE_DISCORDRPC
+	DRPC_UpdatePresence();
+#endif
 }
 
 /* These functions handle the exitgame flag. Before, when the user
